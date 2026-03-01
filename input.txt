@@ -1,0 +1,2 @@
+cost = (price + tax) *
+    0.98
