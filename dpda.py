@@ -9,8 +9,10 @@ class DPDACore:
                 - transitions: кортежи (next_state, stack_push)
         """
         self.dpda_stack = []  # Магазинная память для скобок
-        self.lexem_stack = [] #  Стек для идентификации лексем
+        self.stack = [] #  Стек для хранения лексем и кода
+        self.buffer = "" # Буфер считываемой лексемы
         self.current_state = 0  # Текущее состояние автомата
+        
         self.transition_dict = transition_dict
 
         # Извлекаем headers (варианты, куда можно пойти)
@@ -144,3 +146,41 @@ class DPDACore:
     def get_current_stack(self):
         """Получить текущее состояние стека"""
         return self.dpda_stack.copy()
+
+    def new_buffer(self, symbol):
+        "A1: Начало нового буфера"
+        self.buffer = symbol
+
+    def add_to_buffer(self, symbol):
+        "A2: Добавление в буфер"
+        self.buffer += symbol
+
+    def move_buffer_to_stack(self):
+        "A3: Поместить содержимое буфера в стек"
+        self.stack.append(self.buffer)
+        self.buffer = ""
+
+    def stack_parse(self):
+        "A4: Взятие данных для построения кода"
+        op = self.dpda_stack.pop()
+        Cr = self.stack.pop()
+        Cl = self.stack.pop()
+        self.stack.append(self.process_code(op,Cl,Cr))
+    
+    def finalize(self):
+        "A5: Обработка в конце цепочки"
+        self.move_buffer_to_stack() # A3
+        self.stack_parse() # A4
+
+    def process_code(op,Cl,Cr):
+        "Построение кода"
+        pass
+
+    def cyclic_reduction(self, operator_a):
+        "A6: Циклическое выполнение приоритетных операторов"
+        self.move_buffer_to_stack() # A3
+        operator_z = self.dpda_stack[-1]
+        while (priotity_check(operator_z, operator_a)):
+            self.stack_parse() # A4
+            operator_z = self.dpda_stack[-1]
+        
