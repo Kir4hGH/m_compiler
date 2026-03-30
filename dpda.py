@@ -12,7 +12,8 @@ class DPDACore:
         self.stack = [] # Стек для хранения лексем и кода
         self.buffer = "" # Буфер считываемой лексемы
         self.current_state = 0 # Текущее состояние автомата
-        
+        self.name_table = [] # Таблица имён
+
         self.transition_dict = transition_dict
 
         # Извлекаем headers (варианты, куда можно пойти)
@@ -22,48 +23,51 @@ class DPDACore:
 
     def compile(self, input_string):
         """
-        Запуск анализа входной строки
+        Преобразование входной строки в код, используя ДМПА, и его оптимизация
 
         Args:
             input_string (str): Входная строка для анализа
         Returns:
-            
+            Кортеж, содержащий:
+                - Таблицу имён
+                - Неоптимизированный код
+                - Оптимизированный код
         """
         # Проверка всей строки с помощью ДМПА
-        if not self._process(input_string + '\0'):
+        if not self._process_string(input_string + '\0'):
             return "ДМПА не смог корректно завершить работу"
 
         result = ''
 
         # Генерация кода, если строка валидная (если ДМПА успешно закончил работу)
-        try:
-            generator = CodeGenerator(input_string)
+        # try:
+        #     generator = CodeGenerator(input_string)
+        #
+        #     # Таблица имён
+        #     result += CodeGenerator.print_name_table(generator.build_name_table())
+        #
+        #     if input_string == '':
+        #         return result
+        #
+        #
+        #     # Неоптимизированный код
+        #     code_unoptimized = generator.generate_unoptimized()
+        #     result += "\n=== Неоптимизированный код ===\n"
+        #     for line in code_unoptimized:
+        #         result += line + '\n'
+        #
+        #     # Оптимизированный код
+        #     code_optimized = generator.generate_optimized()
+        #     result += "\n=== Оптимизированный код ===\n"
+        #     for line in code_optimized:
+        #         result += line + '\n'
+        #
+        # return result
+        #
+        # except Exception as ex:
+        #     print(f"Ошибка компиляции: {ex}")
 
-            # Таблица имён
-            result += CodeGenerator.print_name_table(generator.build_name_table())
-
-            if input_string == '':
-                return result
-
-
-            # Неоптимизированный код
-            code_unoptimized = generator.generate_unoptimized()
-            result += "\n=== Неоптимизированный код ===\n"
-            for line in code_unoptimized:
-                result += line + '\n'
-
-            # Оптимизированный код
-            code_optimized = generator.generate_optimized()
-            result += "\n=== Оптимизированный код ===\n"
-            for line in code_optimized:
-                result += line + '\n'
-
-            return result
-
-        except Exception as ex:
-            print(f"Ошибка компиляции: {ex}")
-
-    def _process(self, input_string) -> bool:
+    def _process_string(self, input_string) -> bool:
         """
         Проход по цепочке символов строки
 
@@ -74,20 +78,20 @@ class DPDACore:
 
         while i < len(input_string):
             c = input_string[i]
-            result = _change_state(c)
+            result = self._process_symbol(c)
 
             if result == -1:
                 raise SyntaxError(f"Ошибка компиляции на символе '{c}' (позиция {i})")
 
-            if result == 0 and is_ended:  # если завершилось
+            if result == 0:  # если завершилось
                 break
 
             i += 1
 
         # ДМПА должен завершиться в состоянии 99
-        return is_ended
+        return self.current_state == 99
 
-    def _change_state(self, symbol):
+    def _process_symbol(self, symbol):
         """
         Попытка перехода по таблице переходов ДМПА с текущим символом и состоянием стека
 
@@ -100,89 +104,26 @@ class DPDACore:
         if self.current_state == 99:
             return 0
 
-        # Получаем вершину стека
-        stack_is_empty = len(self.dpda_stack) == 0
-        stack_top = None if stack_is_empty else self.dpda_stack[-1]
-
-        # Ищем все подходящие пары
-        candidate_pairs = []
-        for idx, (symbols, stack_pop) in enumerate(self.headers):
-            # Можно ли перейти по символу
-            if symbol in symbols or symbols == '\1':
-                # Проверяем условия для value
-                is_match = False
-                if stack_pop == '\1':
-                    is_match = True  # '\1' - игнорируем стек
-                elif stack_pop == '\0':
-                    is_match = stack_is_empty  # '\0' - стек должен быть пуст
-                else:
-                    is_match = not stack_is_empty and stack_top == stack_pop
-
-                if is_match:
-                    candidate_pairs.append((idx, symbols, stack_pop))
-
-        # Если нет кандидатов: сразу возвращаем -1
-        if not candidate_pairs:
-            print("Подходящего перехода не найдено")
-            return -1
-
-        # Для каждого кандидата проверяем переходы
-        best_pair_idx = -1
-        best_new_state = -1
-        best_stack_action = '\0'
-        best_header_symbols = ""
-        best_header_stack_pop = '\0'
-
-        for pair_idx, token_key, token_value in candidate_pairs:
-            # Проверяем границы таблицы состояний
-            if (self.current_state < 0 or
-                    self.current_state >= len(self.transition_table) or
-                    pair_idx < 0 or
-                    pair_idx >= len(self.transition_table[0])):
-                continue
-
-            # Получаем переход из таблицы состояний
-            candidate_new_state, candidate_stack_action, candidate_action = self.transition_table[self.current_state][pair_idx]
-                if self.transition_table[self.current_state][pair_idx] else (-1, '\1')
-
-            # Если нашли переход с состоянием не -1, сохраняем его
-            if candidate_new_state != -1:
-                best_pair_idx = pair_idx
-                best_new_state = candidate_new_state
-                best_stack_action = candidate_stack_action
-                best_header_symbols = token_key
-                best_header_stack_pop = token_value
-                best_dpda_action = candidate_action
-                break  # Нашли подходящий переход
-
-        # Если не нашли ни одного перехода с состоянием не -1
-        if best_pair_idx == -1:
-            print("Все возможные переходы ведут в состояние -1")
-            return -1
+        (best_stack_action, best_header_stack_pop, best_dpda_action, best_new_state, best_header_symbols) \
+            = self._find_transition(symbol)
 
         # Выполнение действия
         match best_dpda_action:
             case 1:
                 self.add_to_buffer(symbol)
-                break;
             case 2:
                 self.move_buffer_to_stack()
-                break;
             case 3:
                 self.stack_parse()
-                break;
             case 4:
                 self.finalize()
-                break;
             case 5:
                 self.cyclic_reduction(best_header_stack_pop)
-                break;
             case _:
                 raise NotImplementedError("Нет реализации для действия под номером" + best_dpda_action)
-                break;
 
         # Меняем стек согласно правилам
-        if not stack_is_empty and best_header_stack_pop != '\1':
+        if not self._is_stack_empty() and best_header_stack_pop != '\1':
             # Если value не '\1' (игнорируем), делаем pop
             self.dpda_stack.pop()
 
@@ -193,7 +134,7 @@ class DPDACore:
         # Получаем новую вершину стека для вывода
         new_stack_top = None if not self.dpda_stack else self.dpda_stack[-1]
 
-        print(f"Символ: {symbol}, Символ в стеке: {stack_top}")
+        print(f"Символ: {symbol}, Символ в стеке: {self._get_stack_top()}")
         print(f"Состояние: {self.current_state} -> {best_new_state}")
         print(f"Переход: '{best_header_symbols}', '{best_header_stack_pop}'")
 
@@ -226,6 +167,66 @@ class DPDACore:
 
         return 1
 
+    def _find_transition(self, symbol):
+        # Ищем все подходящие пары
+        candidate_pairs = []
+        for idx, (symbols, stack_pop) in enumerate(self.headers):
+            # Можно ли перейти по символу
+            if symbol in symbols or symbols == '\1':
+                # Проверяем условия для value
+                is_match = False
+                if stack_pop == '\1':
+                    is_match = True  # '\1' - игнорируем стек
+                elif stack_pop == '\0':
+                    is_match = self._is_stack_empty()  # '\0' - стек должен быть пуст
+                else:
+                    is_match = not self._is_stack_empty() and self._get_stack_top() == stack_pop
+
+                if is_match:
+                    candidate_pairs.append((idx, symbols, stack_pop))
+
+        # Если нет кандидатов: сразу возвращаем -1
+        if not candidate_pairs:
+            print("Подходящего перехода не найдено")
+            return -1
+
+        # Для каждого кандидата проверяем переходы
+        best_pair_idx = -1
+        best_new_state = -1
+        best_stack_action = '\0'
+        best_header_symbols = ""
+        best_header_stack_pop = '\0'
+
+        for pair_idx, token_key, token_value in candidate_pairs:
+            # Проверяем границы таблицы состояний
+            if (self.current_state < 0 or
+                    self.current_state >= len(self.transition_table) or
+                    pair_idx < 0 or
+                    pair_idx >= len(self.transition_table[0])):
+                continue
+
+            # Получаем переход из таблицы состояний
+            candidate_new_state, candidate_stack_action, candidate_action = self.transition_table[self.current_state][
+                pair_idx] \
+                if self.transition_table[self.current_state][pair_idx] else (-1, '\1')
+
+            # Если нашли переход с состоянием не -1, сохраняем его
+            if candidate_new_state != -1:
+                best_pair_idx = pair_idx
+                best_new_state = candidate_new_state
+                best_stack_action = candidate_stack_action
+                best_header_symbols = token_key
+                best_header_stack_pop = token_value
+                best_dpda_action = candidate_action
+                break  # Нашли подходящий переход
+
+        # Если не нашли ни одного перехода с состоянием не -1
+        if best_pair_idx == -1:
+            print("Все возможные переходы ведут в состояние -1")
+            return -1
+
+        return best_stack_action, best_header_stack_pop, best_dpda_action, best_new_state, best_header_symbols
+
     def reset(self):
         """Сброс автомата в начальное состояние"""
         self.dpda_stack = []
@@ -236,13 +237,20 @@ class DPDACore:
         """Получить текущее состояние стека"""
         return self.dpda_stack.copy()
 
+    def _is_stack_empty(self):
+        return len(self.dpda_stack) == 0
+
+    def _get_stack_top(self):
+        return None if self._is_stack_empty() else self.dpda_stack[-1]
+
     def add_to_buffer(self, symbol):
         "A1: Добавление в буфер"
         self.buffer += symbol
 
     def move_buffer_to_stack(self):
-        "A2: Поместить содержимое буфера в стек"
+        "A2: Поместить содержимое буфера в стек и в таблицу имён"
         self.stack.append(self.buffer)
+        self.add_to_name_table(self.buffer)
         self.buffer = ""
 
     def stack_parse(self):
@@ -250,14 +258,14 @@ class DPDACore:
         op = self.dpda_stack.pop()
         Cr = self.stack.pop()
         Cl = self.stack.pop()
-        self.stack.append(self.process_code(op,Cl,Cr))
+        self.stack.append(self.process_code(op, Cl, Cr))
     
     def finalize(self):
         "A4: Обработка в конце цепочки"
         self.move_buffer_to_stack() # A2
         self.stack_parse() # A3
 
-    def process_code(op,Cl,Cr):
+    def process_code(op, Cl, Cr):
         "Построение кода"
         pass
 
@@ -265,7 +273,18 @@ class DPDACore:
         "A5: Циклическое выполнение приоритетных операторов"
         self.move_buffer_to_stack() # A2
         operator_z = self.dpda_stack[-1]
-        while (priotity_check(operator_z, operator_a)):
+        while DPDACore._priotity_check(operator_z, operator_a):
             self.stack_parse() # A3
             operator_z = self.dpda_stack[-1]
-        
+
+    @staticmethod
+    def _priotity_check(operator_z, operator_a):
+        return False
+
+    def add_to_name_table(self, token):
+        # Добавляем запись в таблицу имён
+        self.name_table.append({
+            'Номер': self.name_table.count(),
+            'Идентификатор': token,
+            'Информация': "info"
+        })
