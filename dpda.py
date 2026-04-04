@@ -34,9 +34,11 @@ class DPDACore:
                 - Оптимизированный код
         """
         # Проверка всей строки с помощью ДМПА
-        process_result = self._process_string(input_string + '\0')
-        if not process_result:
-            return "ДМПА не смог корректно завершить работу"
+        try:
+            process_result = self._process_string(input_string + '\0')
+        except Exception as e:
+            return f"Ошибка обработки строки: {e}"
+
 
         result = ''
 
@@ -68,7 +70,7 @@ class DPDACore:
         # except Exception as ex:
         #     print(f"Ошибка компиляции: {ex}")
 
-    def _process_string(self, input_string) -> bool:
+    def _process_string(self, input_string) -> tuple:
         """
         Проход по цепочке символов строки
 
@@ -89,8 +91,9 @@ class DPDACore:
 
             i += 1
 
-        # ДМПА должен завершиться в состоянии 99
-        return self.current_state == 99
+        code = self.stack
+        optimized = self.stack
+        return self.name_table, code, optimized
 
     def _process_symbol(self, symbol):
         """
