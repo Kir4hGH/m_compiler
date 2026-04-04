@@ -34,7 +34,8 @@ class DPDACore:
                 - Оптимизированный код
         """
         # Проверка всей строки с помощью ДМПА
-        if not self._process_string(input_string + '\0'):
+        process_result = self._process_string(input_string + '\0')
+        if not process_result:
             return "ДМПА не смог корректно завершить работу"
 
         result = ''
