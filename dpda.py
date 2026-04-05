@@ -13,6 +13,8 @@ class DPDACore:
         self.buffer = "" # Буфер считываемой лексемы
         self.current_state = 0 # Текущее состояние автомата
         self.name_table = [] # Таблица имён
+        self.memory_counter = 0
+        self.is_ended = False
 
         self.transition_dict = transition_dict
 
@@ -57,27 +59,14 @@ class DPDACore:
                  0 - завершение работы (достигнуто состояние 99)
                 -1 - ошибка (нет перехода, неверный символ и т.д.)
         """
-        # Если автомат уже завершил работу: ничего не делаем
+        # Если автомат уже завершил работу, ничего не делаем
         if self.current_state == 99:
             return 0
 
         (best_stack_action, best_header_stack_pop, best_dpda_action, best_new_state, best_header_symbols) \
             = self._find_transition(symbol)
 
-        # Выполнение действия
-        match best_dpda_action:
-            case 1:
-                self.add_to_buffer(symbol)
-            case 2:
-                self.move_buffer_to_stack()
-            case 3:
-                self.stack_parse()
-            case 4:
-                self.finalize()
-            case 5:
-                self.cyclic_reduction(best_header_stack_pop)
-            case _:
-                raise NotImplementedError("Нет реализации для действия под номером" + best_dpda_action)
+        self._do_action(best_dpda_action, best_header_stack_pop, symbol)
 
         # Меняем стек согласно правилам
         if not self._is_stack_empty() and best_header_stack_pop != '\1':
@@ -123,6 +112,22 @@ class DPDACore:
             return 0
 
         return 1
+
+    def _do_action(self, dpda_action, header_stack_pop, symbol):
+        # Выполнение действия
+        match dpda_action:
+            case 1:
+                self._add_to_buffer(symbol)
+            case 2:
+                self._move_buffer_to_stack()
+            case 3:
+                self._stack_parse()
+            case 4:
+                self._finalize()
+            case 5:
+                self._cyclic_reduction(header_stack_pop)
+            case _:
+                raise NotImplementedError("Нет реализации для действия под номером" + dpda_action)
 
     def _find_transition(self, symbol):
         # Ищем все подходящие пары
@@ -200,48 +205,66 @@ class DPDACore:
     def _get_stack_top(self):
         return None if self._is_stack_empty() else self.dpda_stack[-1]
 
-    def add_to_buffer(self, symbol):
+    def _add_to_buffer(self, symbol):
         "A1: Добавление в буфер"
         self.buffer += symbol
 
-    def move_buffer_to_stack(self):
+    def _move_buffer_to_stack(self):
         "A2: Поместить содержимое буфера в стек и в таблицу имён"
         self.stack.append(self.buffer)
         self.add_to_name_table(self.buffer)
         self.buffer = ""
 
-    def stack_parse(self):
+    def _stack_parse(self):
         "A3: Взятие данных для построения кода"
         op = self.dpda_stack.pop()
         Cr = self.stack.pop()
         Cl = self.stack.pop()
-        self.stack.append(self.process_code(op, Cl, Cr))
+        self.stack.append(self._process_code(op, Cl, Cr))
     
-    def finalize(self):
+    def _finalize(self):
         "A4: Обработка в конце цепочки"
-        self.move_buffer_to_stack() # A2
-        self.stack_parse() # A3
+        self._move_buffer_to_stack() # A2
+        self._stack_parse() # A3
 
-    def process_code(op, Cl, Cr):
-        "Построение кода"
-        pass
+    def _process_code(self, op, Cl, Cr):
+        """Построение кода"""
+        if op == "=":
+            "добавить STORE Cr"
+            Cl += f"\nSTORE {Cr}"
+        else:
+            code_op = ""
+            match op:
+                case "+":
+                    code_op = "ADD"
+                case "*":
+                    code_op = "MPY"
+                case _:
+                    raise NotImplementedError(f"Нет реализации для действия \"{op}\"")
 
-    def cyclic_reduction(self, operator_a):
+            "store load action"
+            Cl += (f"\nSTORE {{{++self.memory_counter}}}"
+                   f"\nLOAD {Cr}"
+                   f"\n{code_op} {{{self.memory_counter}}}")
+
+
+    def _cyclic_reduction(self, operator_a):
         "A5: Циклическое выполнение приоритетных операторов"
-        self.move_buffer_to_stack() # A2
+        self._move_buffer_to_stack() # A2
         operator_z = self.dpda_stack[-1]
-        while DPDACore._priotity_check(operator_z, operator_a):
-            self.stack_parse() # A3
+        while DPDACore.get_operator_priority(operator_z) >= DPDACore.get_operator_priority(operator_a):
+            self._stack_parse() # A3
             operator_z = self.dpda_stack[-1]
 
     @staticmethod
-    def _priotity_check(operator_z, operator_a):
-        return False
+    def get_operator_priority(op):
+        operators = "+*("
+        return operators.index(op)
 
     def add_to_name_table(self, token):
         # Добавляем запись в таблицу имён
         self.name_table.append({
-            'Номер': self.name_table.count(),
+            'Номер': self.name_table.count,
             'Идентификатор': token,
             'Информация': "info"
         })
