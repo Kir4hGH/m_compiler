@@ -1,4 +1,4 @@
-# from compiler import StringCompiler
+from compiler import StringCompiler
 
 
 """

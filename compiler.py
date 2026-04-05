@@ -12,75 +12,47 @@ class StringCompiler:
 
         self._transition_dict = transition_dict
 
-    def compile(self, input_string):
+    def compile(self, input_string) -> tuple:
         """
-        Запуск анализа входной строки
+        Преобразование входной строки в код, используя ДМПА, и его оптимизация
 
         Args:
             input_string (str): Входная строка для анализа
+        Returns:
+            Кортеж, содержащий:
+                - Таблицу имён
+                - Неоптимизированный код
+                - Оптимизированный код
         """
         # Проверка всей строки с помощью ДМПА
-        if not self._validate_with_dmpa(input_string + '\0'):
-            return "ДМПА не смог корректно завершить работу"
-
-        result = ''
-
-        # Генерация кода, если строка валидная (если ДМПА успешно закончил работу)
-        try:
-            generator = CodeGenerator(input_string)
-
-            # Таблица имён
-            result += CodeGenerator.print_name_table(generator.build_name_table())
-
-            if input_string == '':
-                return result
-
-
-            # Неоптимизированный код
-            code_unoptimized = generator.generate_unoptimized()
-            result += "\n=== Неоптимизированный код ===\n"
-            for line in code_unoptimized:
-                result += line + '\n'
-
-            # Оптимизированный код
-            code_optimized = generator.generate_optimized()
-            result += "\n=== Оптимизированный код ===\n"
-            for line in code_optimized:
-                result += line + '\n'
-
-            return result
-
-        except Exception as ex:
-            print(f"Ошибка компиляции: {ex}")
-
-
-    def _validate_with_dmpa(self, input_string) -> bool:
-        """
-        Проверка входной строки с помощью ДМПА
-
-        Returns:
-            bool: True если строка валидна, False в противном случае
-        """
         core = DPDACore(self._transition_dict)
-        i = 0
+        name_table, unoptimized_code = core.process_string(input_string + '\0')
 
-        while i < len(input_string):
-            c = input_string[i]
-            result = core.change_state(c)
+        # result = ''
+        # Оптимизация кода, если строка валидная (если ДМПА успешно закончил работу)
+        generator = CodeOptimizer(input_string)
 
-            if result == -1:
-                raise SyntaxError(f"Ошибка компиляции на символе '{c}' (позиция {i})")
+        # Таблица имён
+        # result += CodeGenerator.print_name_table(generator.build_name_table())
 
-            if result == 0 and core.is_ended:  # если завершилось
-                break
-
-            i += 1
-
-        # ДМПА должен завершиться в состоянии 99
-        return core.is_ended
+        # if input_string == '':
+        #     return result
 
 
-class CodeGenerator:
+        # Неоптимизированный код
+        # code_unoptimized = generator.generate_unoptimized()
+        # result += "\n=== Неоптимизированный код ===\n"
+        # for line in code_unoptimized:
+        #     result += line + '\n'
+
+        optimized_code = generator.generate_optimized()
+        # result += "\n=== Оптимизированный код ===\n"
+        # for line in code_optimized:
+        #     result += line + '\n'
+        return name_table, unoptimized_code, optimized_code
+
+
+class CodeOptimizer:
     """
     Класс генерации кода типа Ассемблер
     Публичные методы:

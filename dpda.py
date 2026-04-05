@@ -21,61 +21,14 @@ class DPDACore:
         # Извлекаем transition_table (сами инструкции для перехода)
         self.transition_table = transition_dict['transitions']
 
-    def compile(self, input_string):
-        """
-        Преобразование входной строки в код, используя ДМПА, и его оптимизация
-
-        Args:
-            input_string (str): Входная строка для анализа
-        Returns:
-            Кортеж, содержащий:
-                - Таблицу имён
-                - Неоптимизированный код
-                - Оптимизированный код
-        """
-        # Проверка всей строки с помощью ДМПА
-        try:
-            process_result = self._process_string(input_string + '\0')
-        except Exception as e:
-            return f"Ошибка обработки строки: {e}"
-
-
-        result = ''
-
-        # Генерация кода, если строка валидная (если ДМПА успешно закончил работу)
-        # try:
-        #     generator = CodeGenerator(input_string)
-        #
-        #     # Таблица имён
-        #     result += CodeGenerator.print_name_table(generator.build_name_table())
-        #
-        #     if input_string == '':
-        #         return result
-        #
-        #
-        #     # Неоптимизированный код
-        #     code_unoptimized = generator.generate_unoptimized()
-        #     result += "\n=== Неоптимизированный код ===\n"
-        #     for line in code_unoptimized:
-        #         result += line + '\n'
-        #
-        #     # Оптимизированный код
-        #     code_optimized = generator.generate_optimized()
-        #     result += "\n=== Оптимизированный код ===\n"
-        #     for line in code_optimized:
-        #         result += line + '\n'
-        #
-        # return result
-        #
-        # except Exception as ex:
-        #     print(f"Ошибка компиляции: {ex}")
-
-    def _process_string(self, input_string) -> tuple:
+    def process_string(self, input_string) -> tuple:
         """
         Проход по цепочке символов строки
 
         Returns:
-            bool: True если строка валидна, False в противном случае
+            Кортеж, содержащий:
+                - Таблицу имён
+                - Неоптимизированный код
         """
         i = 0
 
@@ -92,10 +45,10 @@ class DPDACore:
             i += 1
 
         code = self.stack
-        optimized = self.stack
-        return self.name_table, code, optimized
+        return self.name_table, code
 
-    def _process_symbol(self, symbol):
+    def _process_symbol(self, symbol) -> int:
+
         """
         Попытка перехода по таблице переходов ДМПА с текущим символом и состоянием стека
 
