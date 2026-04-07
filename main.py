@@ -1,12 +1,11 @@
 from compiler import StringCompiler
 
-
 """
 1) Алфавит лишний --
 2) e-такты для цепочки (игнорируем не только стек, но и символ) --
 3) управляющие символы вместо символа '\1' (напр. '\1') --
 4) в ДМПА должны быть \r\n --
-5) ДМПА должна выполнять первый этап трансляции (внедрить действия)
+5) ДМПА должна выполнять первый этап трансляции (внедрить действия) --
 """
 
 def main():
@@ -44,17 +43,18 @@ def main():
         [(11, '\1'),    ( )   ,  (11, '\1'), ( 2, '\1'),    ( )   , ( 2, '\1'),    ( )   , (10, '\1'),    ( )   ,     ( )   , (99,'\1')]  # q11
     ]}
 
-    try:
-        compiler = StringCompiler(transition_dict)
-        result = compiler.compile(input_string)
+    compiler = StringCompiler(transition_dict)
+    result = compiler.compile(input_string)
 
-        print(result)
-        with open('output.txt', 'w', encoding='utf-8') as f:
-            f.write(result) if result is not None else f.write('')
-    except Exception as e:
-        print(f"Ошибка работы программы: {e}")
-        with open('output.txt', 'w', encoding='utf-8') as f:
-            f.write(str(e))
+    print(result)
+    with open('output.txt', 'w', encoding='utf-8') as f:
+        for item in result[2]:
+            f.write(item + '\n') if result is not None else f.write('')
+    # try:
+    # except Exception as e:
+    #     print(f"Ошибка работы программы: {e}")
+    #     with open('output.txt', 'w', encoding='utf-8') as f:
+    #         f.write(str(e))
 
 if __name__ == '__main__':
     main()

@@ -28,17 +28,15 @@ class StringCompiler:
         core = DPDACore(self._transition_dict)
         name_table, unoptimized_code = core.process_string(input_string + '\0')
 
-        # result = ''
         # Оптимизация кода, если строка валидная (если ДМПА успешно закончил работу)
         generator = CodeOptimizer(input_string)
 
         # Таблица имён
         # result += CodeGenerator.print_name_table(generator.build_name_table())
 
+        # result = ''
         # if input_string == '':
         #     return result
-
-
         # Неоптимизированный код
         # code_unoptimized = generator.generate_unoptimized()
         # result += "\n=== Неоптимизированный код ===\n"

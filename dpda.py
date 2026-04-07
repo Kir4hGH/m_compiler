@@ -32,8 +32,8 @@ class DPDACore:
                 - Таблицу имён
                 - Неоптимизированный код
         """
-        i = 0
 
+        i = 0
         while i < len(input_string):
             c = input_string[i]
             result = self._process_symbol(c)
@@ -66,7 +66,8 @@ class DPDACore:
         (best_stack_action, best_header_stack_pop, best_dpda_action, best_new_state, best_header_symbols) \
             = self._find_transition(symbol)
 
-        self._do_action(best_dpda_action, best_header_stack_pop, symbol)
+        if best_dpda_action is not None:
+            self._do_action(best_dpda_action, best_header_stack_pop, symbol)
 
         # Меняем стек согласно правилам
         if not self._is_stack_empty() and best_header_stack_pop != '\1':
@@ -113,22 +114,6 @@ class DPDACore:
 
         return 1
 
-    def _do_action(self, dpda_action, header_stack_pop, symbol):
-        # Выполнение действия
-        match dpda_action:
-            case 1:
-                self._add_to_buffer(symbol)
-            case 2:
-                self._move_buffer_to_stack()
-            case 3:
-                self._stack_parse()
-            case 4:
-                self._finalize()
-            case 5:
-                self._cyclic_reduction(header_stack_pop)
-            case _:
-                raise NotImplementedError("Нет реализации для действия под номером" + dpda_action)
-
     def _find_transition(self, symbol):
         # Ищем все подходящие пары
         candidate_pairs = []
@@ -149,7 +134,6 @@ class DPDACore:
 
         # Если нет кандидатов: сразу возвращаем -1
         if not candidate_pairs:
-            print("Подходящего перехода не найдено")
             return -1
 
         # Для каждого кандидата проверяем переходы
@@ -158,6 +142,7 @@ class DPDACore:
         best_stack_action = '\0'
         best_header_symbols = ""
         best_header_stack_pop = '\0'
+        best_dpda_action = None
 
         for pair_idx, token_key, token_value in candidate_pairs:
             # Проверяем границы таблицы состояний
@@ -168,9 +153,11 @@ class DPDACore:
                 continue
 
             # Получаем переход из таблицы состояний
-            candidate_new_state, candidate_stack_action, candidate_action = self.transition_table[self.current_state][
-                pair_idx] \
+            candidate_transition = self.transition_table[self.current_state][pair_idx] \
                 if self.transition_table[self.current_state][pair_idx] else (-1, '\1')
+
+            (candidate_new_state, candidate_stack_action) = candidate_transition[0:2]
+            candidate_action = candidate_transition[2] if candidate_transition.count == 3 else None
 
             # Если нашли переход с состоянием не -1, сохраняем его
             if candidate_new_state != -1:
@@ -184,10 +171,25 @@ class DPDACore:
 
         # Если не нашли ни одного перехода с состоянием не -1
         if best_pair_idx == -1:
-            print("Все возможные переходы ведут в состояние -1")
             return -1
 
         return best_stack_action, best_header_stack_pop, best_dpda_action, best_new_state, best_header_symbols
+
+    def _do_action(self, dpda_action, header_stack_pop, symbol):
+        # Выполнение действия
+        match dpda_action:
+            case 1:
+                self._add_to_buffer(symbol)
+            case 2:
+                self._move_buffer_to_stack()
+            case 3:
+                self._stack_parse()
+            case 4:
+                self._finalize()
+            case 5:
+                self._cyclic_reduction(header_stack_pop)
+            case _:
+                raise NotImplementedError("Нет реализации для действия под номером" + dpda_action)
 
     def reset(self):
         """Сброс автомата в начальное состояние"""
@@ -204,6 +206,8 @@ class DPDACore:
 
     def _get_stack_top(self):
         return None if self._is_stack_empty() else self.dpda_stack[-1]
+
+    """Действия"""
 
     def _add_to_buffer(self, symbol):
         "A1: Добавление в буфер"
@@ -227,13 +231,22 @@ class DPDACore:
         self._move_buffer_to_stack() # A2
         self._stack_parse() # A3
 
+    def _cyclic_reduction(self, operator_a):
+        "A5: Циклическое выполнение приоритетных операторов"
+        self._move_buffer_to_stack() # A2
+        operator_z = self.dpda_stack[-1]
+        while DPDACore.get_operator_priority(operator_z) >= DPDACore.get_operator_priority(operator_a):
+            self._stack_parse() # A3
+            operator_z = self.dpda_stack[-1]
+
+    """Вспомогательные методы"""
+
     def _process_code(self, op, Cl, Cr):
         """Построение кода"""
         if op == "=":
             "добавить STORE Cr"
             Cl += f"\nSTORE {Cr}"
         else:
-            code_op = ""
             match op:
                 case "+":
                     code_op = "ADD"
@@ -246,15 +259,6 @@ class DPDACore:
             Cl += (f"\nSTORE {{{++self.memory_counter}}}"
                    f"\nLOAD {Cr}"
                    f"\n{code_op} {{{self.memory_counter}}}")
-
-
-    def _cyclic_reduction(self, operator_a):
-        "A5: Циклическое выполнение приоритетных операторов"
-        self._move_buffer_to_stack() # A2
-        operator_z = self.dpda_stack[-1]
-        while DPDACore.get_operator_priority(operator_z) >= DPDACore.get_operator_priority(operator_a):
-            self._stack_parse() # A3
-            operator_z = self.dpda_stack[-1]
 
     @staticmethod
     def get_operator_priority(op):
