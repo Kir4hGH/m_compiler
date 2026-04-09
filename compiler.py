@@ -1,4 +1,4 @@
-from dpda import DPDACore
+import dpda
 
 
 class StringCompiler:
@@ -14,7 +14,7 @@ class StringCompiler:
 
     def compile(self, input_string) -> tuple:
         """
-        Преобразование входной строки в код, используя ДМПА, и его оптимизация
+        Компиляция входной строки в код типа Ассемблер, используя ДМПА, и его оптимизация
 
         Args:
             input_string (str): Входная строка для анализа
@@ -24,16 +24,10 @@ class StringCompiler:
                 - Неоптимизированный код
                 - Оптимизированный код
         """
-        # Проверка всей строки с помощью ДМПА
-        core = DPDACore(self._transition_dict)
-        name_table, unoptimized_code = core.process_string(input_string + '\0')
-
         # Оптимизация кода, если строка валидная (если ДМПА успешно закончил работу)
-        generator = CodeOptimizer(input_string)
-
+        # generator = CodeOptimizer(input_string)
         # Таблица имён
         # result += CodeGenerator.print_name_table(generator.build_name_table())
-
         # result = ''
         # if input_string == '':
         #     return result
@@ -42,12 +36,16 @@ class StringCompiler:
         # result += "\n=== Неоптимизированный код ===\n"
         # for line in code_unoptimized:
         #     result += line + '\n'
-
-        optimized_code = generator.generate_optimized()
+        # optimized_code = generator.generate_optimized()
         # result += "\n=== Оптимизированный код ===\n"
         # for line in code_optimized:
         #     result += line + '\n'
-        return name_table, unoptimized_code, optimized_code
+
+        processor = dpda.ActionProcessor()
+        core = dpda.DPDACore(self._transition_dict, processor)
+        # Проверка всей строки с помощью ДМПА
+        core.process_string(input_string + '\0')
+        return processor.get_result() # name_table, unoptimized_code, optimized_code
 
 
 class CodeOptimizer:

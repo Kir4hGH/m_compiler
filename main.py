@@ -22,7 +22,7 @@ def main():
             ("+-", '\1'),
             ("+*", '\1'),
             ("(", '\1'),
-            (")", '+'),
+            (")", '('),
             (".", '\1'),
             ("eE", '\1'),
             ("\0", '\0')
@@ -31,7 +31,7 @@ def main():
         #   ' '         a-z          0-9         =          +-         +*          (         ) ,'+'        .         eE      HALT,'\0'
         [( 0, '\1'), ( 1, '\1'),     ( )   ,    ( )   ,     ( )   ,    ( )   ,     ( )   ,    ( )   ,     ( )   ,     ( )   , (99,'\1')], # q0
         [(11, '\1'), ( 1, '\1'), ( 1, '\1'), ( 2, '\1'),    ( )   ,    ( )   ,     ( )   ,    ( )   ,     ( )   ,     ( )   ,    ( )   ], # q1
-        [( 2, '\1'), ( 9, '\1'), ( 3, '\1'),    ( )   ,     ( )   ,    ( )   ,  ( 2, '+'),    ( )   ,     ( )   ,     ( )   ,    ( )   ], # q2
+        [( 2, '\1'), ( 9, '\1'), ( 3, '\1'),    ( )   ,     ( )   ,    ( )   ,  ( 2, '('),    ( )   ,     ( )   ,     ( )   ,    ( )   ], # q2
         [(10, '\1'),    ( )   ,  ( 3, '\1'),    ( )   ,     ( )   , ( 2, '\1'),    ( )   , (10, '\1'), ( 4,'\1'), ( 6, '\1'), (99,'\1')], # q3
         [   ( )   ,     ( )   ,  ( 5, '\1'),    ( )   ,     ( )   ,    ( )   ,     ( )   ,    ( )   ,     ( )   ,     ( )   ,    ( )   ], # q4
         [(10, '\1'),    ( )   ,  ( 5, '\1'),    ( )   ,     ( )   , ( 2, '\1'),    ( )   , (10, '\1'),    ( )   , ( 6, '\1'), (99,'\1')], # q5
@@ -44,17 +44,17 @@ def main():
     ]}
 
     compiler = StringCompiler(transition_dict)
-    result = compiler.compile(input_string)
 
-    print(result)
-    with open('output.txt', 'w', encoding='utf-8') as f:
-        for item in result[2]:
-            f.write(item + '\n') if result is not None else f.write('')
-    # try:
-    # except Exception as e:
-    #     print(f"Ошибка работы программы: {e}")
-    #     with open('output.txt', 'w', encoding='utf-8') as f:
-    #         f.write(str(e))
+    try:
+        result = compiler.compile(input_string)
+        print(result)
+        with open('output.txt', 'w', encoding='utf-8') as f:
+            for item in result[2]:
+                f.write(item + '\n') if result is not None else f.write('')
+    except Exception as e:
+        print(f"Ошибка работы программы: {e}")
+        with open('output.txt', 'w', encoding='utf-8') as f:
+            f.write(str(e))
 
 if __name__ == '__main__':
     main()
