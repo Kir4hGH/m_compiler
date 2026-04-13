@@ -1,1 +1,16 @@
-pop from empty list
+{'Номер': <built-in method count of list object at 0x00000254EEE10200>, 'Идентификатор': 'cost', 'Информация': 'info'}
+{'Номер': <built-in method count of list object at 0x00000254EEE10200>, 'Идентификатор': 'price', 'Информация': 'info'}
+{'Номер': <built-in method count of list object at 0x00000254EEE10200>, 'Идентификатор': 'tax', 'Информация': 'info'}
+{'Номер': <built-in method count of list object at 0x00000254EEE10200>, 'Идентификатор': '', 'Информация': 'info'}
+{'Номер': <built-in method count of list object at 0x00000254EEE10200>, 'Идентификатор': '0.98', 'Информация': 'info'}
+
+price
+STORE {0}
+LOAD tax
+ADD {0}
+STORE 
+STORE {0}
+LOAD 0.98
+MPY {0}
+
+None
