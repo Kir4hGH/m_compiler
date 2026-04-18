@@ -52,14 +52,14 @@ def main():
     print(result)
     with open('output.txt', 'w', encoding='utf-8') as f:
         # Записываем первый элемент (список словарей)
-        for dictionary in result[0]:
-            f.write(str(dictionary) + '\n')
+        for key, value in result[0].items():
+            f.write(f'{value['Номер']}: Идентификатор: {key} - {value['Информация']} \n')
 
         # Записываем второй элемент (строку с инструкциями)
-        f.write('\n' + result[1] + '\n')
+        f.write('\nНеоптимизированный код:\n' + result[1] + '\n')
 
         # Записываем третий элемент (None)
-        f.write(str(result[2]) + '\n')
+        f.write('\nОптимизированный код:\n' + result[2] + '\n')
     try:
         pass
     except Exception as e:

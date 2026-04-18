@@ -201,7 +201,7 @@ class ActionProcessor:
         """
         self.stack = []  # Стек для хранения лексем и кода
         self.buffer = ""  # Буфер считываемой лексемы
-        self.name_table = []  # Таблица имён
+        self.name_table = {}  # Таблица имён
         self.memory_counter = 0
 
     def do_action(self, dpda: DPDACore,  dpda_action: int, header_stack_pop, symbol):
@@ -223,9 +223,8 @@ class ActionProcessor:
     def get_result(self) -> tuple:
         """Возврат обработанных данных"""
         if self.stack is not None:
-            code = self.stack.pop()
+            code = self.stack.pop()["value"]
             optimized_code = self._optimize(code)
-
         return self.name_table, code, optimized_code
 
     def reset(self):
@@ -242,9 +241,14 @@ class ActionProcessor:
 
     def action_move_buffer_to_stack(self):
         """A2: Поместить содержимое буфера в стек и в таблицу имён"""
-        self.stack.append(self.buffer)
-        self._add_to_name_table(self.buffer)
-        self.buffer = ""
+        if self.buffer != '':
+            if self._is_number(self.buffer):
+                self.buffer = '=' + self.buffer
+            self.stack.append(
+                {'value': self.buffer,
+                 'level': 0})
+            self._add_to_name_table(self.buffer)
+            self.buffer = ""
 
     def action_stack_parse(self, dpda_stack):
         """A3: Взятие данных для построения кода"""
@@ -272,27 +276,65 @@ class ActionProcessor:
 
     def _process_code(self, op, Cl, Cr):
         """Построение кода"""
-        if op == "=":
-            "добавить STORE Cr"
-            Cl += f"\nSTORE {Cr}"
-        else:
-            match op:
-                case "+":
-                    code_op = "ADD"
-                case "*":
-                    code_op = "MPY"
-                case _:
-                    raise NotImplementedError(f"Нет реализации для действия \"{op}\"")
+        new_level = max(Cr['level'], Cl['level']) + 1
 
-            "store load action"
-            Cl += (f"\nSTORE {{{++self.memory_counter}}}"
-                   f"\nLOAD {Cr}"
-                   f"\n{code_op} {{{self.memory_counter}}}")
-        return Cl
+        match op:
+            case "=":
+                code = (f"LOAD {Cr['value']}"
+                        f"\nSTORE {Cl['value']}")
+            case "+":
+                code = (f"{Cr['value']}"
+                        f"\nSTORE ${new_level}"
+                        f"\nLOAD {Cl['value']}"
+                        f"\nADD ${new_level}")
+            case "*":
+                code = (f"{Cr['value']}"
+                        f"\nSTORE ${new_level}"
+                        f"\nLOAD {Cl['value']}"
+                        f"\nMPY ${new_level}")
+            case _:
+                raise NotImplementedError(f"Нет реализации для действия \"{op}\"")
+        return {'value': code,
+                'level': new_level}
 
     @staticmethod
-    def _optimize(code):
-        pass
+    def _optimize(original_code):
+        import re
+        code = original_code
+
+        # 2. Адекватная (разрешает перестановку ТОЛЬКО если оба операнда - временные ячейки $)
+        # Или просто запрещает заменять LOAD временной переменной на LOAD константы/имени
+        reg_sane = r"(?:STORE\s+(\$\w+)\s+LOAD\s+\1)|(?:LOAD\s+(\$\w+)\s+(ADD|MPY)\s+(\$\w+))"
+
+        selected_reg = reg_sane
+
+        def sub_func(m):
+            if m.group(1):  # Правило 3 (STORE $1; LOAD $1) - всегда удаляем
+                return ""
+            # Правила 1-2 (Коммутативность)
+            return f"LOAD {m.group(4)}\n{m.group(3)} {m.group(2)}"
+
+        # Оптимизация 1-3
+        for _ in range(3):
+            code = re.sub(selected_reg, sub_func, code).strip()
+            code = re.sub(r'\n\s*\n', '\n', code)
+
+        # Правило 4 (выносим отдельно, так как оно глобальное)
+        reg_4 = r"LOAD\s+(=[\d\.]+)\s+STORE\s+(\$\d+)(?=\s+LOAD)"
+        m4 = re.search(reg_4, code)
+        if m4:
+            val, var = m4.group(1), m4.group(2)
+            code = code.replace(f"LOAD {val}", "").replace(f"STORE {var}", "").replace(var, val)
+
+        return re.sub(r'\n\s*\n', '\n', code).strip()
+
+    @staticmethod
+    def _is_number(value):
+        try:
+            float(value)
+            return True
+        except ValueError:
+            return False
 
     @staticmethod
     def _get_operator_priority(op):
@@ -305,8 +347,9 @@ class ActionProcessor:
 
     def _add_to_name_table(self, token):
         # Добавление записи в таблицу имён
-        self.name_table.append({
-            'Номер': self.name_table.count,
-            'Идентификатор': token,
-            'Информация': "info"
-        })
+        info = 'Константа с плавающей точкой' if token[0] == '=' else 'Переменная с плавающей точкой'
+        if token not in self.name_table:
+            self.name_table[token] = ({
+                'Номер': len(self.name_table),
+                'Информация': f"{info}"
+            })
