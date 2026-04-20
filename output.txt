@@ -1,15 +1,28 @@
-{'Номер': <built-in method count of list object at 0x000002A28CDA0200>, 'Идентификатор': 'cost', 'Информация': 'info'}
-{'Номер': <built-in method count of list object at 0x000002A28CDA0200>, 'Идентификатор': 'price', 'Информация': 'info'}
-{'Номер': <built-in method count of list object at 0x000002A28CDA0200>, 'Идентификатор': 'tax', 'Информация': 'info'}
-{'Номер': <built-in method count of list object at 0x000002A28CDA0200>, 'Идентификатор': '', 'Информация': 'info'}
-{'Номер': <built-in method count of list object at 0x000002A28CDA0200>, 'Идентификатор': '0.98', 'Информация': 'info'}
+Таблица имён:
+0: Идентификатор: cost - Переменная с плавающей точкой
+1: Идентификатор: =0.98 - Константа с плавающей точкой
+2: Идентификатор: =5 - Константа с плавающей точкой
+3: Идентификатор: =2 - Константа с плавающей точкой
+4: Идентификатор: a - Переменная с плавающей точкой
 
-price
-STORE {0}
-LOAD tax
-ADD {0}
-STORE 
-STORE {0}
-LOAD 0.98
-MPY {0}
-None
+Неоптимизированный код:
+LOAD a
+STORE $3
+LOAD =2
+STORE $2
+LOAD =5
+STORE $1
+LOAD =0.98
+MPY $1
+ADD $2
+ADD $3
+STORE cost
+
+Оптимизированный код:
+LOAD a
+STORE $3
+LOAD =5
+MPY =0.98
+ADD =2
+ADD $3
+STORE cost

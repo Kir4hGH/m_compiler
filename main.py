@@ -48,20 +48,17 @@ def main():
 
     compiler = StringCompiler(transition_dict)
 
-    result = compiler.compile(input_string)
-    print(result)
-    with open('output.txt', 'w', encoding='utf-8') as f:
-        # Записываем первый элемент (список словарей)
-        for key, value in result[0].items():
-            f.write(f'{value['Номер']}: Идентификатор: {key} - {value['Информация']} \n')
-
-        # Записываем второй элемент (строку с инструкциями)
-        f.write('\nНеоптимизированный код:\n' + result[1] + '\n')
-
-        # Записываем третий элемент (None)
-        f.write('\nОптимизированный код:\n' + result[2] + '\n')
     try:
-        pass
+        result = compiler.compile(input_string)
+        with open('output.txt', 'w', encoding='utf-8') as f:
+            output = 'Таблица имён:\n'
+            for key, value in result[0].items():
+                output += f'{value['Номер']}: Идентификатор: {key} - {value['Информация']}\n'
+            output += '\nНеоптимизированный код:\n' + result[1] + '\n'
+            output += '\nОптимизированный код:\n' + result[2] + '\n'
+
+            f.write(f'{output}')
+            print(output)
     except Exception as e:
         print(f"Ошибка работы программы: {e}")
         with open('output.txt', 'w', encoding='utf-8') as f:

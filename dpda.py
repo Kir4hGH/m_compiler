@@ -30,26 +30,28 @@ class DPDACore:
             self.action_processor.reset()
 
         i = 0
-        while i <= len(input_string):
-            # Попытка перехода с e-тактом
-            match self._process_symbol('\1'):
-                case 0:
-                    break
-                case 1:
-                    continue
-
-            # Проверка последнего е-такта
-            if i == len(input_string):
-                raise SyntaxError(f"Ошибка компиляции на символе '{input_string[i-1]}' (позиция {i-1})")
-
-            # Попытка перехода с символом из цепочки
-            c = input_string[i]
-            match self._process_symbol(c):
-                case -1:
-                    raise SyntaxError(f"Ошибка компиляции на символе '{c}' (позиция {i})")
-                case 0:
-                    break
-            i += 1
+        try:
+            while i <= len(input_string):
+                # Попытка перехода с символом из цепочки
+                if i < len(input_string):
+                    match self._process_symbol(input_string[i]):
+                        case 1:
+                            i += 1
+                            continue
+                        case 0:
+                            break
+                # Попытка e-такта
+                match self._process_symbol('\1'):
+                    case 0:
+                        break
+                    case 1:
+                        continue
+                    case -1:
+                        pos = min(i-1, len(input_string)-1)
+                        raise SyntaxError(f"Ошибка компиляции на символе '{input_string[pos]}' (позиция {pos})")
+        except Exception:
+            pos = min(i - 1, len(input_string) - 1)
+            raise SyntaxError(f"Ошибка компиляции на символе '{input_string[pos]}' (позиция {pos})")
 
     def _process_symbol(self, symbol) -> int:
         """
@@ -83,9 +85,6 @@ class DPDACore:
         # Выполнение stack_insert
         if stack_insert not in ('\0', '\1'):
             self.dpda_stack.append(stack_insert)
-
-        # Вывод отладочной информации в консоль
-        self._print_debug_info(stack_pop, header_symbols, new_state, stack_insert, symbol)
 
         # Обновление состояния
         self.current_state = new_state
@@ -170,29 +169,6 @@ class DPDACore:
     def is_stack_empty(self):
         return len(self.dpda_stack) == 0
 
-    def _print_debug_info(self, header_stack_pop, header_symbols, new_state, stack_action, symbol):
-        pop_action = ""
-        if header_stack_pop == '\0':
-            pop_action = "пустой"
-        elif header_stack_pop == '\1':
-            pop_action = "игнорировать"
-        else:
-            pop_action = f"забрать '{header_stack_pop}'"
-
-        push_action = ""
-        if stack_action == '\1':
-            push_action = "игнорировать"
-        elif stack_action == '\0':
-            push_action = "ничего не класть"
-        else:
-            push_action = f"положить '{stack_action}'"
-
-        print(f"Символ: {symbol}, Символ в стеке: {self.get_stack_top()}")
-        print(f"Состояние: {self.current_state} -> {new_state}")
-        print(f"Переход: '{header_symbols}', '{header_stack_pop}'")
-        print(f"Pop(): {pop_action}, Push(): {push_action}")
-        print(f"Новая вершина стека: {None if not self.is_stack_empty() else self.get_stack_top()}\n")
-
 
 class ActionProcessor:
     def __init__(self):
@@ -222,7 +198,9 @@ class ActionProcessor:
 
     def get_result(self) -> tuple:
         """Возврат обработанных данных"""
-        if self.stack is not None:
+        code = ''
+        optimized_code = ''
+        if len(self.stack) != 0:
             code = self.stack.pop()["value"]
             optimized_code = self._optimize(code)
         return self.name_table, code, optimized_code
@@ -274,6 +252,15 @@ class ActionProcessor:
 
     """Вспомогательные методы"""
 
+    def _add_to_name_table(self, token):
+        # Добавление записи в таблицу имён
+        info = 'Константа с плавающей точкой' if token[0] == '=' else 'Переменная с плавающей точкой'
+        if token not in self.name_table:
+            self.name_table[token] = ({
+                'Номер': len(self.name_table),
+                'Информация': f"{info}"
+            })
+
     def _process_code(self, op, Cl, Cr):
         """Построение кода"""
         new_level = max(Cr['level'], Cl['level']) + 1
@@ -297,41 +284,6 @@ class ActionProcessor:
         return {'value': code,
                 'level': new_level}
 
-    # @staticmethod
-    # def _optimize(code):
-    #     import re
-    #
-    #     # Правила 1-3
-    #     code = re.sub(r'LOAD (=.*?)\n(ADD|MPY) (\$.*?)', r'LOAD \3\n\2 \1', code)
-    #     code = re.sub(r'STORE (\$.*?)\nLOAD \1', '', code)
-    #
-    #     # Правило 4
-    #     lines = code.split('\n')
-    #     active_substitutions = {}  # temp -> const
-    #
-    #     for i, line in enumerate(lines):
-    #         # Если это LOAD =const; STORE $temp (смотрим пару)
-    #         if i + 1 < len(lines) and line.startswith('LOAD =') and lines[i + 1].startswith('STORE $'):
-    #             const = line[5:].strip()
-    #             temp = lines[i + 1].split()[1]
-    #             active_substitutions[temp] = const
-    #             lines[i] = ''  # помечаем на удаление
-    #             lines[i + 1] = ''  # помечаем на удаление
-    #             continue
-    #
-    #         # Если это STORE $temp (перезапись) — удаляем из активных
-    #         if line.startswith('STORE $'):
-    #             temp = line.split()[1]
-    #             if temp in active_substitutions:
-    #                 del active_substitutions[temp]
-    #
-    #         # Применяем активные подстановки
-    #         for temp, const in active_substitutions.items():
-    #             if not line.startswith(f'STORE {temp}'):
-    #                 lines[i] = re.sub(r'(?<!\bSTORE )' + re.escape(temp), const, lines[i])
-    #
-    #     return '\n'.join([line for line in lines if line])
-
     @staticmethod
     def _optimize(code: str) -> str:
         import re
@@ -343,8 +295,8 @@ class ActionProcessor:
         prev_len = -1
         while len(code) != prev_len:
             prev_len = len(code)
-            code = re.sub(r'LOAD (=[^\n]*)\nSTORE (\$[^\n]*)\n((?:(?!\nSTORE \2)[^\n]*\n)*?)(ADD|MPY) \2\n?',
-                          r'\3\4 \1\n', code)
+            code = re.sub(r'LOAD (=.*?)\nSTORE (\$.*?)\n((?:(?!\nSTORE \2)[^\n]*\n)*?)(ADD|MPY) \2',
+                          r'\3\4 \1', code)
 
         return code
 
@@ -362,14 +314,5 @@ class ActionProcessor:
             case None:
                 return -1
             case _:
-                operators = "\1\0=(+*"
+                operators = "(\1\0=+*"
                 return operators.index(op)
-
-    def _add_to_name_table(self, token):
-        # Добавление записи в таблицу имён
-        info = 'Константа с плавающей точкой' if token[0] == '=' else 'Переменная с плавающей точкой'
-        if token not in self.name_table:
-            self.name_table[token] = ({
-                'Номер': len(self.name_table),
-                'Информация': f"{info}"
-            })

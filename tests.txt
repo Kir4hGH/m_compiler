@@ -2,5 +2,5 @@ cost = (price + tax) * 0.98
 y = x + x * 0.98 + 5
 a = ((b+(c*d)+0.25e-3)+grape)
 result = 2.5 + 3.7
-tree = (leaf1 + leaf2) + ( leaf3 * 15.04 ) + 2)
+tree = ((leaf1 + leaf2) + ( leaf3 * 15.04 ) + 2)
 cost = 0.98 * 5 + 2 + a
