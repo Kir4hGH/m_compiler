@@ -1,3 +1,5 @@
+from typing import List, Dict
+
 class DPDACore:
     def __init__(self, transition_dict: dict, action_processor):
         """
@@ -224,7 +226,7 @@ class ActionProcessor:
         """Возврат обработанных данных"""
         if self.stack is not None:
             code = self.stack.pop()["value"]
-            optimized_code = self._optimize(code)
+            optimized_code = self.optimize(code)
         return self.name_table, code, optimized_code
 
     def reset(self):
@@ -297,36 +299,170 @@ class ActionProcessor:
         return {'value': code,
                 'level': new_level}
 
-    @staticmethod
-    def _optimize(original_code):
-        import re
-        code = original_code
+    # @staticmethod
+    # def _optimize(code):
+    #     import re
+    #
+    #     # Правила 1-3
+    #     code = re.sub(r'LOAD (=.*?)\n(ADD|MPY) (\$.*?)', r'LOAD \3\n\2 \1', code)
+    #     code = re.sub(r'STORE (\$.*?)\nLOAD \1', '', code)
+    #
+    #     # Правило 4
+    #     lines = code.split('\n')
+    #     active_substitutions = {}  # temp -> const
+    #
+    #     for i, line in enumerate(lines):
+    #         # Если это LOAD =const; STORE $temp (смотрим пару)
+    #         if i + 1 < len(lines) and line.startswith('LOAD =') and lines[i + 1].startswith('STORE $'):
+    #             const = line[5:].strip()
+    #             temp = lines[i + 1].split()[1]
+    #             active_substitutions[temp] = const
+    #             lines[i] = ''  # помечаем на удаление
+    #             lines[i + 1] = ''  # помечаем на удаление
+    #             continue
+    #
+    #         # Если это STORE $temp (перезапись) — удаляем из активных
+    #         if line.startswith('STORE $'):
+    #             temp = line.split()[1]
+    #             if temp in active_substitutions:
+    #                 del active_substitutions[temp]
+    #
+    #         # Применяем активные подстановки
+    #         for temp, const in active_substitutions.items():
+    #             if not line.startswith(f'STORE {temp}'):
+    #                 lines[i] = re.sub(r'(?<!\bSTORE )' + re.escape(temp), const, lines[i])
+    #
+    #     return '\n'.join([line for line in lines if line])
 
-        # 2. Адекватная (разрешает перестановку ТОЛЬКО если оба операнда - временные ячейки $)
-        # Или просто запрещает заменять LOAD временной переменной на LOAD константы/имени
-        reg_sane = r"(?:STORE\s+(\$\w+)\s+LOAD\s+\1)|(?:LOAD\s+(\$\w+)\s+(ADD|MPY)\s+(\$\w+))"
 
-        selected_reg = reg_sane
+    def optimize(self, unoptimized_code: str) -> str:
+        """Оптимизация кода"""
+        code = unoptimized_code
+        prev_code = ""
 
-        def sub_func(m):
-            if m.group(1):  # Правило 3 (STORE $1; LOAD $1) - всегда удаляем
-                return ""
-            # Правила 1-2 (Коммутативность)
-            return f"LOAD {m.group(4)}\n{m.group(3)} {m.group(2)}"
+        while code != prev_code:  # Пока код изменяется
+            prev_code = code
+            code = self._optimize_pass(code)
 
-        # Оптимизация 1-3
-        for _ in range(3):
-            code = re.sub(selected_reg, sub_func, code).strip()
-            code = re.sub(r'\n\s*\n', '\n', code)
+        return code
 
-        # Правило 4 (выносим отдельно, так как оно глобальное)
-        reg_4 = r"LOAD\s+(=[\d\.]+)\s+STORE\s+(\$\d+)(?=\s+LOAD)"
-        m4 = re.search(reg_4, code)
-        if m4:
-            val, var = m4.group(1), m4.group(2)
-            code = code.replace(f"LOAD {val}", "").replace(f"STORE {var}", "").replace(var, val)
+    def _optimize_pass(self, code: str) -> str:
+        """Один проход оптимизации"""
+        lines = code.split('\n')
 
-        return re.sub(r'\n\s*\n', '\n', code).strip()
+        # Этап 1: Коммутативность (правила 1 и 2)
+        lines_with_commutativity = self._apply_commutativity(lines)
+
+        # Поиск констант для правила 4
+        temp_to_constant = self._find_constants_for_optimization(lines_with_commutativity)
+
+        # Этап 2 и 3: Применение оптимизаций (правила 3 и 4)
+        optimized = self._apply_optimizations(lines_with_commutativity, temp_to_constant)
+
+        # Собираем обратно в строку
+        return '\n'.join(optimized)
+
+    def _apply_commutativity(self, lines: List[str]) -> List[str]:
+        """Применение правил коммутативности 1 и 2"""
+        result = lines.copy()
+
+        for i in range(len(result) - 1):
+            line = result[i]
+            next_line = result[i + 1]
+
+            # Проверка пары: LOAD a; ADD/MPY b
+            if line.startswith("LOAD ") and (next_line.startswith("ADD ") or next_line.startswith("MPY ")):
+                load_operand = line[5:].strip()  # a
+                parts = next_line.split(' ')
+                opcode = parts[0]  # ADD или MPY
+                op_operand = parts[1]  # b
+
+                # Если левый операнд — константа или правый операнд — временная переменная
+                should_swap = (load_operand.startswith("=") and not op_operand.startswith("=")) and \
+                              (op_operand.startswith("$") and not load_operand.startswith("$"))
+
+                if should_swap:
+                    result[i] = f"LOAD {op_operand}"
+                    result[i + 1] = f"{opcode} {load_operand}"
+
+        return result
+
+    def _find_constants_for_optimization(self, lines: List[str]) -> Dict[str, str]:
+        """Поиск констант для правила 4"""
+        temp_to_constant = {}
+
+        for i in range(len(lines) - 1):
+            # Поиск шаблона - "LOAD =константа" сразу за которым идёт "STORE $временная"
+            if lines[i].startswith("LOAD =") and lines[i + 1].startswith("STORE $"):
+                constant = lines[i][5:].strip()  # LOAD =
+                temp = lines[i + 1].split(' ')[1]  # STORE $
+
+                # Проверка - не перезаписывается ли $временная позже другим STORE
+                if not self._is_temp_overwritten(lines, temp, i + 1):
+                    temp_to_constant[temp] = constant
+
+        return temp_to_constant
+
+    def _apply_optimizations(self, lines: List[str], temp_to_constant: Dict[str, str]) -> List[str]:
+        """Применение оптимизаций правил 3 и 4"""
+        optimized = []
+        skip_next = False  # Пропустить следующую строку
+
+        for i in range(len(lines)):
+            # Пропуск уже обработанной строки
+            if skip_next:
+                skip_next = False
+                continue
+
+            line = lines[i]
+            next_line = lines[i + 1] if i + 1 < len(lines) else None
+
+            # Правило 3: пропуск STORE $x; LOAD $x
+            if line.startswith("STORE $") and next_line is not None:
+                temp = line.split(' ')[1]
+                if next_line == f"LOAD {temp}" and not self._is_temp_used_after(lines, temp, i + 1):
+                    skip_next = True
+                    continue
+
+            # Правило 4: пропуск LOAD =константа; STORE $временная
+            if line.startswith("LOAD =") and next_line is not None and next_line.startswith("STORE $"):
+                temp = next_line.split(' ')[1]
+                if temp in temp_to_constant:
+                    skip_next = True
+                    continue
+
+            # Правило 4: подстановка констант
+            for temp, constant in temp_to_constant.items():
+                if f" {temp}" in line and not line.startswith(f"STORE {temp}"):
+                    line = line.replace(f" {temp}", f" {constant}")
+
+            optimized.append(line)
+
+        return optimized
+
+    def _is_temp_overwritten(self, lines: List[str], temp: str, start_index: int) -> bool:
+        """Проверка - перезаписывается ли $temp позже другим STORE"""
+        for i in range(start_index + 1, len(lines)):
+            if lines[i].startswith(f"STORE {temp}"):
+                return True  # Найдена перезапись — нельзя оптимизировать
+        return False  # Не перезаписывается — можно оптимизировать
+
+    def _is_temp_used_after(self, lines: List[str], temp: str, start_index: int) -> bool:
+        """Проверка - используется ли $temp после позиции (кроме STORE)"""
+        for i in range(start_index + 1, len(lines)):
+            line = lines[i].strip()
+            if not line:
+                continue
+
+            # Если встретили использование $temp как операнда (не как цель STORE)
+            if f" {temp}" in line and not line.startswith(f"STORE {temp}"):
+                return True
+
+            # Если встретили перезапись $temp — дальше можно не смотреть
+            if line.startswith(f"STORE {temp}"):
+                return False
+
+        return False
 
     @staticmethod
     def _is_number(value):
